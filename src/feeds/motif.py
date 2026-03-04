@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Hashable, Iterable, List, Sequence, Tuple
+from typing import Dict, Hashable, Iterable, List, Sequence, Tuple, Optional
 
 import networkx as nx
 
@@ -24,7 +24,6 @@ def motif_scores(
 ):
     """Compute motif-based anomaly scores for candidate nodes in a directed graph.
 
-    This function is directly extracted from your motif-based notebooks (S4).
     The scoring is **label-free** and aggregates local structural signals:
 
     - Reciprocity: ``|In(v) ∩ Out(v)|`` (2-cycles)
@@ -126,7 +125,7 @@ def coherent_topk_feed(
 ) -> List[Hashable]:
     """Select a locality-constrained feed from a ranked node list.
 
-    Extracted from your motif notebooks: choose a few top-ranked **centers**, collect nodes
+    Choose a few top-ranked **centers**, collect nodes
     within undirected distance `d_max` around each center, then fill the feed with the highest
     ranked nodes that lie inside these balls.
 
@@ -161,5 +160,35 @@ def coherent_topk_feed(
             used.add(v)
             if len(feed) >= k:
                 break
+
+    return feed
+
+
+def S4_motif_based_coherent(
+    G: nx.DiGraph,
+    k: int = 200,
+    C: int = 100_000,
+    centers: int = 5,
+    d_max: int = 2,
+    motif_params: Optional[dict] = None,
+    max_in: int = 500,
+    max_out: int = 500,
+) -> List[Hashable]:
+    '''Motif-based coherent feed selection (S4).'''
+    
+    motif_params = motif_params or dict(alpha=0.2, star_ratio=15.0, s_in=0.3, s_out=0.4)
+
+    # ---- stage 1: proxy + candidates ----
+    in_deg = dict(G.in_degree())
+    out_deg = dict(G.out_degree())
+    proxy = {v: in_deg[v] * out_deg[v] for v in G.nodes()}
+    candidates = sorted(G.nodes(), key=lambda v: (-proxy[v], str(v)))[:C]
+
+    # ---- stage 2: motif scoring ----
+    scores, _details = motif_scores(G, candidates, max_in=max_in, max_out=max_out, **motif_params)
+    ranked = sorted(scores.keys(), key=lambda v: (-scores[v], str(v)))
+
+    # ---- stage 3: feed selection ----
+    feed = coherent_topk_feed(G, ranked, k=k, centers=centers, d_max=d_max)
 
     return feed

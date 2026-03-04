@@ -11,7 +11,6 @@ def largest_component(G: nx.Graph, component_type: str = "weak") -> nx.Graph:
     - Directed graphs: uses weakly connected components by default, or strongly connected components
       if `component_type="strong"`.
 
-    This is extracted from the notebooks without changing behavior.
     """
     if G.number_of_nodes() == 0:
         return G.copy()
@@ -27,16 +26,3 @@ def largest_component(G: nx.Graph, component_type: str = "weak") -> nx.Graph:
     return G.subgraph(largest_cc).copy()
 
 
-def connected_components_as_graphs(G: nx.Graph) -> List[nx.Graph]:
-    """Return a list of connected components as separate graphs (undirected connectivity)."""
-    if nx.number_connected_components(G) == 1:
-        return [G]
-    comps = []
-    for component in nx.connected_components(G):
-        comps.append(G.subgraph(component).copy())
-    return comps
-
-
-def eccentricity_distributions(components: List[nx.Graph]):
-    """Compute eccentricity dict for each component (for exploratory analysis)."""
-    return [nx.eccentricity(comp) for comp in components]

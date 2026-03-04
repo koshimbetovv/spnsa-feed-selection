@@ -1,12 +1,12 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "SPNSA Feed Selection & Motif-Based Seeding for AML Transaction Graphs"
+title: "SPNSA Feed Selection & Motif-Based Feed for AML Transaction Graphs"
 authors:
   - family-names: "Koshimbetov"
     given-names: "Doniyor"
 license: MIT
-repository-code: "https://github.com/<YOUR_GITHUB_USERNAME>/spnsa-feed-selection"
+repository-code: "https://github.com/koshimbetovv/spnsa-feed-selection"
 abstract: >
   Research code for feed selection strategies (S0–S4) for SPNSA subgraph extraction
   on AML transaction graphs (IBM-AML / Elliptic).
