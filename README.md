@@ -1,35 +1,81 @@
-# SPNSA Feed Selection (S0–S4) for AML Transaction Graphs
+# Extracting Illicit‑Rich Subgraphs via Feed‑Guided Shortest Paths (SPNSA)
 
-This repository contains research code for **feed selection strategies** for the
-Shortest Paths Network Search Algorithm (**SPNSA**) and a **motif-based feed strategy (S4)**
-targeting illicit-enriched investigative subgraphs in transaction networks.
+This repository contains the reference implementation for the research work:
 
-## What’s inside
-- **SPNSA implementation** (`spnsa_feed/spnsa.py`)
-- **Trivial / degree-based feed strategies** (S0–S3) (`spnsa_feed/feeds/trivial.py`)
-- **Motif-based scoring + coherent feed selection (S4)** (`spnsa_feed/feeds/motif.py`)
-- **Experiment runners** (`spnsa_feed/experiments/`)
-- **Data loading helpers** for:
-  - IBM-AML CSV transaction logs (`spnsa_feed/data/ibm_aml.py`)
-  - Elliptic classes + edgelist (`spnsa_feed/data/elliptic.py`)
-- **Visualization utilities** for saving SPN connected components (`spnsa_feed/viz/components.py`)
-- **Legacy notebooks** (as provided) under `notebooks/legacy/`
+**“Extracting Illicit‑Rich Subgraphs from Transaction Networks via Feed‑Guided Shortest Paths”**
+(Doniyor Koshimbetov, Emine Şule Yazıcı, Asha Rao)
+
+It studies **investigative subgraph extraction** for AML transaction graphs using the **Shortest Paths Network Search Algorithm (SPNSA)** and shows that the **choice of the feed set** can drastically change both the *size* and the *illicit enrichment* of the extracted subgraph.
+
+The core contribution is a **label‑free, motif‑based coherent feed selection strategy (S4)** that targets nodes whose local directed neighborhoods resemble common laundering typologies (e.g., reciprocity/round‑tripping, relay behavior, star‑like aggregation/distribution), and then enforces *locality* via multi‑center selection.
+
+---
+
+## TL;DR (main empirical takeaways)
+
+We evaluate 5 feed strategies (S0–S4) on **IBM‑AML** (HI‑Small, LI‑Small, HI‑Medium) and **Elliptic**:
+
+- On **Elliptic**, at **(k,r)=(200,1)**, **S4** extracts a **213‑node** subgraph with **IR(H)=33.8%**, far above the dataset base rate (**2.23%**) and random feeds (~2–3%).
+- On **IBM‑AML HI‑Small / HI‑Medium**, **S4** is best across tested settings, reaching illicit ratios in the **~16%–29%** range while staying in the few‑hundred‑node regime.
+- On **IBM‑AML LI‑Small**, the best label‑free heuristic is **S2** (degree imbalance), not S4; at **(k,r)=(200,1)**, **S2** achieves **IR(H)=11.4%** vs **S4=5.5%**.
+
+A compact “paper‑style” snapshot for **(k,r)=(200,1)** (numbers reported in the paper’s Table 3):
+
+| Dataset | Base IR(G) | Best label‑free strategy | IR(H) | |V(H)| |
+|---|---:|---|---:|---:|
+| IBM‑AML LI‑Small | 1.04% | **S2** | 0.114 | 246 |
+| IBM‑AML HI‑Small | 1.70% | **S4** | 0.226 | 296 |
+| IBM‑AML HI‑Medium | 2.59% | **S4** | 0.268 | 370 |
+| Elliptic | 2.23% | **S4** | 0.338 | 213 |
+
+---
+
+## Repository layout
+
+```
+.
+├─ src/
+│  ├─ spnsa.py                 # SPNSA extraction (ego‑nets + centrality + shortest paths)
+│  ├─ feeds/
+│  │  ├─ trivial.py             # S0–S3 baselines (oracle, random, degree‑diff, collect/distribute)
+│  │  └─ motif.py               # motif scoring + coherent selection (S4)
+│  ├─ data/
+│  │  ├─ ibm_aml.py              # IBM‑AML CSV loaders + illicit node derivation
+│  │  └─ elliptic.py             # Elliptic loaders (classes + edgelist)
+│  ├─ graph/
+│  │  └─ components.py           # largest weakly/strongly connected component utility
+│  └─ run_motif_based.py         # S4 “run once” helper (single seed)
+├─ scripts/
+│  ├─ exp_LI_Small.py
+│  ├─ exp_HI_Small.py
+│  ├─ exp_HI_Medium.py
+│  └─ exp_elliptic.py            # paper‑style evaluation runners
+├─ data/                         # local datasets (gitignored)
+└─ outputs/                      # local outputs (gitignored)
+```
+
+**Note on imports:** the experiment scripts prepend the repository root to `sys.path`, and import modules as `src.*`.
+
+---
 
 ## Installation
 
-Recommended: create a virtual environment, then install in editable mode:
+**Python:** 3.10+ (the code uses `X | Y` type unions).
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate     # (Windows: .venv\Scripts\activate)
+source .venv/bin/activate  # (Windows: .venv\Scripts\activate)
+
+pip install -U pip
 pip install -r requirements.txt
-pip install -e .
 ```
 
-## Data (not included)
-Create a local `data/` directory and place datasets there.
+---
 
-Suggested layout:
+## Data setup (not included)
+
+Create `data/` and place the raw dataset files as:
+
 ```
 data/
   ibm-aml/
@@ -41,51 +87,73 @@ data/
     elliptic_txs_edgelist.csv
 ```
 
-## Quick start
+**IBM‑AML note:** the paper evaluates IBM‑AML on the **largest weakly connected component** (almost all illicit‑labeled nodes lie there).
 
-### 1) Build a graph (IBM-AML)
-```python
-from spnsa_feed.data.ibm_aml import build_graph_from_transactions, suspicious_nodes_from_transactions
-from spnsa_feed.graph.components import largest_component
+---
 
-G = build_graph_from_transactions("data/ibm-aml/LI-Small_Trans.csv")
-G_lcc = largest_component(G, component_type="weak")
+## Running experiments
 
-criminal_nodes = suspicious_nodes_from_transactions("data/ibm-aml/LI-Small_Trans.csv")
+Each script prints a small table with columns:
+`strategy, k, r, |V|, |E|, |I|, IR`.
+
+### Elliptic
+```bash
+python scripts/exp_elliptic.py
 ```
 
-### 2) Run S4 (motif-based feed) once
-```python
-from spnsa_feed.experiments.motif_experiment import run_once
-
-row = run_once(
-    G_base=G_lcc,
-    criminal_nodes=set(criminal_nodes),
-    seed=0,
-    C=300_000,
-    k=200,
-    centers=5,
-    d_max=2,
-    radius=1,
-    motif_params=dict(alpha=0.2, star_ratio=15.0, s_in=0.4, s_out=0.4),
-    max_in=5000,
-    max_out=5000,
-)
-print(row)
+### IBM‑AML
+```bash
+python scripts/exp_LI_Small.py
+python scripts/exp_HI_Small.py
+python scripts/exp_HI_Medium.py
 ```
 
-### 3) Save SPN connected components
+### Changing settings
+
+In each `scripts/exp_*.py` file, edit:
+
+- `(k,r)` (feed size and SPNSA radius)
+- `S4_PARAMS` (candidate pool size `C`, coherence `centers` and `d_max`, motif weights, and neighborhood caps `max_in/max_out`)
+- `S1_TRIALS` (number of random trials for S1; paper uses 100)
+
+---
+
+## Reproducing the paper plots
+
+The paper reports two high‑level visual summaries:
+
+- **Figure 2:** grouped bar chart of illicit ratio IR(H) across strategies.
+- **Figure 3:** size–enrichment scatter (|V(H)| vs IR(H)).
+
+A practical workflow:
+
+1) Run each dataset script for the configurations you want (e.g., `(k,r)=(200,1)` and `(500,1)`).
+2) Save the printed DataFrame to CSV by adding one line at the end of each script:
+
 ```python
-from spnsa_feed.viz.components import save_spn_components
-from spnsa_feed.spnsa import spnsa
-from spnsa_feed.feeds.trivial import random_feed
-
-feed = random_feed(list(G_lcc.nodes()), k=200, seed=0)
-SPN, _ = spnsa(G_lcc, feed, radius=1)
-
-save_spn_components(SPN, illicit_nodes=criminal_nodes, save_dir="outputs/spn_components")
+from pathlib import Path
+Path("outputs").mkdir(exist_ok=True)
+df.to_csv(f"outputs/{DATASET_NAME.replace(' ', '_')}_k{k}_r{r}.csv", index=False)
 ```
 
-## Notes on project structure
-This repo uses the **`src/` layout** (recommended in modern Python packaging guides) to avoid
-accidental imports from the working directory and to keep the package importable only after installation.
+3) Use a small plotting script/notebook that reads the CSVs and makes the grouped bar + scatter plots.
+
+---
+
+## Implementation notes
+
+- **Label usage:** labels are *never* used to build S1–S4 feeds; S0 is an oracle upper bound used only for reference.
+- **IBM illicit nodes:** evaluation derives *node* labels from *laundering edges* (an account is illicit if it appears as an endpoint of any laundering transaction).
+- **Scalability controls:** S4 computes motif scores only on a candidate pool of size `C`, and optionally caps in/out neighborhoods (`max_in`, `max_out`) during scoring.
+
+---
+
+## Citation
+
+If you use this code, please cite the accompanying paper.
+
+---
+
+## License
+
+See `LICENSE`.

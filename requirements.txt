@@ -1,5 +1,10 @@
-networkx>=3.0
+# Core scientific stack
 numpy>=1.23
 pandas>=1.5
-matplotlib>=3.7
+
+# Graph processing
+networkx>=3.0
+
+# Progress + plotting
 tqdm>=4.66
+matplotlib>=3.7
