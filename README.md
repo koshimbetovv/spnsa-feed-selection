@@ -19,14 +19,6 @@ We evaluate 5 feed strategies (S0–S4) on **IBM‑AML** (HI‑Small, LI‑Small
 - On **IBM‑AML HI‑Small / HI‑Medium**, **S4** is best across tested settings, reaching illicit ratios in the **~16%–29%** range while staying in the few‑hundred‑node regime.
 - On **IBM‑AML LI‑Small**, the best label‑free heuristic is **S2** (degree imbalance), not S4; at **(k,r)=(200,1)**, **S2** achieves **IR(H)=11.4%** vs **S4=5.5%**.
 
-A compact “paper‑style” snapshot for **(k,r)=(200,1)** (numbers reported in the paper’s Table 3):
-
-| Dataset | Base IR(G) | Best label‑free strategy | IR(H) | |V(H)| |
-|---|---:|---|---:|---:|
-| IBM‑AML LI‑Small | 1.04% | **S2** | 0.114 | 246 |
-| IBM‑AML HI‑Small | 1.70% | **S4** | 0.226 | 296 |
-| IBM‑AML HI‑Medium | 2.59% | **S4** | 0.268 | 370 |
-| Elliptic | 2.23% | **S4** | 0.338 | 213 |
 
 ---
 
@@ -55,20 +47,6 @@ A compact “paper‑style” snapshot for **(k,r)=(200,1)** (numbers reported i
 ```
 
 **Note on imports:** the experiment scripts prepend the repository root to `sys.path`, and import modules as `src.*`.
-
----
-
-## Installation
-
-**Python:** 3.10+ (the code uses `X | Y` type unions).
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # (Windows: .venv\Scripts\activate)
-
-pip install -U pip
-pip install -r requirements.txt
-```
 
 ---
 
@@ -115,28 +93,6 @@ In each `scripts/exp_*.py` file, edit:
 - `(k,r)` (feed size and SPNSA radius)
 - `S4_PARAMS` (candidate pool size `C`, coherence `centers` and `d_max`, motif weights, and neighborhood caps `max_in/max_out`)
 - `S1_TRIALS` (number of random trials for S1; paper uses 100)
-
----
-
-## Reproducing the paper plots
-
-The paper reports two high‑level visual summaries:
-
-- **Figure 2:** grouped bar chart of illicit ratio IR(H) across strategies.
-- **Figure 3:** size–enrichment scatter (|V(H)| vs IR(H)).
-
-A practical workflow:
-
-1) Run each dataset script for the configurations you want (e.g., `(k,r)=(200,1)` and `(500,1)`).
-2) Save the printed DataFrame to CSV by adding one line at the end of each script:
-
-```python
-from pathlib import Path
-Path("outputs").mkdir(exist_ok=True)
-df.to_csv(f"outputs/{DATASET_NAME.replace(' ', '_')}_k{k}_r{r}.csv", index=False)
-```
-
-3) Use a small plotting script/notebook that reads the CSVs and makes the grouped bar + scatter plots.
 
 ---
 
