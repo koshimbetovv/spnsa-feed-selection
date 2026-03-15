@@ -67,6 +67,10 @@ data/
 
 **IBM‑AML note:** the paper evaluates IBM‑AML on the **largest weakly connected component** (almost all illicit‑labeled nodes lie there).
 
+IBM-AML dataset link: https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml
+
+Elliptic dataset link: https://www.kaggle.com/datasets/ellipticco/elliptic-data-set
+
 ---
 
 ## Running experiments
