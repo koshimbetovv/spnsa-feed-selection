@@ -91,7 +91,7 @@ def motif_scores(
         leaf_star = leaf_in + leaf_out
 
         score = (
-            0.2 + math.log1p(cycle3)
+              math.log1p(cycle3)
             + alpha * math.log1p(recip)
             + beta * math.log1p(relay)
             + s_in * math.log1p(fanin_star)
@@ -190,5 +190,8 @@ def S4_motif_based_coherent(
 
     # ---- stage 3: feed selection ----
     feed = coherent_topk_feed(G, ranked, k=k, centers=centers, d_max=d_max)
+
+    # for ablation study, we may want to return the ranked list instead of the coherent feed
+    #feed = ranked[:k]
 
     return feed
