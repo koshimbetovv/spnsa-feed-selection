@@ -19,6 +19,7 @@ We evaluate 5 feed strategies (S0–S4) on **IBM‑AML** (HI‑Small, LI‑Small
 - On **IBM‑AML HI‑Small / HI‑Medium**, **S4** is best across tested settings, reaching illicit ratios in the **~16%–29%** range while staying in the few‑hundred‑node regime.
 - On **IBM‑AML LI‑Small**, the best label‑free heuristic is **S2** (degree imbalance), not S4; at **(k,r)=(200,1)**, **S2** achieves **IR(H)=11.4%** vs **S4=5.5%**.
 
+![S4 sensitivity plot](figures/s4_sensitivity.png)
 
 ---
 

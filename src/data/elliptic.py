@@ -26,6 +26,13 @@ def illicit_nodes_from_classes(classes_csv: str, illicit_label: str = "1") -> Se
     df["class"] = df["class"].str.strip()
     return set(df.loc[df["class"] == str(illicit_label), "txId"].tolist())
 
+def licit_nodes_from_classes(classes_csv: str, licit_label: str = "0") -> Set[str]:
+    """Return licit txIds (original string ids). Expected columns: `txId`, `class`."""
+    df = pd.read_csv(classes_csv, usecols=["txId", "class"], dtype=str)
+    df["txId"] = df["txId"].str.strip()
+    df["class"] = df["class"].str.strip()
+    return set(df.loc[df["class"] == str(licit_label), "txId"].tolist())
+
 
 def build_criminal_graph(classes_csv: str, edgelist_csv: str, illicit_label: str = "1", directed: bool = True) -> nx.Graph:
     """Induced subgraph on illicit nodes: keep only illicit nodes and edges between them."""
