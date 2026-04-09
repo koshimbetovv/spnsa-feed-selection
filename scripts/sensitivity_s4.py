@@ -25,11 +25,16 @@ DATASET_KEY = "li-small"  # one of: elliptic, hi-small, hi-medium, li-small
 K = 200
 RADIUS = 1
 
+# Choose what to evaluate for each feed:
+# - "induced": induced subgraph on the selected feed nodes
+# - "spnsa": SPNSA output subgraph built from the selected feed
+EVAL_MODE = "induced"
+
 # Paper-style S4 defaults for each dataset family
 DEFAULT_S4_BY_DATASET: dict[str, dict] = {
     "elliptic": dict(
         C=300_000,
-        centers=7,
+        centers=5,
         d_max=2,
         motif_params=dict(
             alpha=0.2,
@@ -89,7 +94,7 @@ DEFAULT_S4_BY_DATASET: dict[str, dict] = {
             s_in=0.2,
             s_out=0.4,
             s_leaf=0.6,
-            star_ratio=27.0,
+            star_ratio=15.0,
             leaf_deg_max=2,
         ),
         max_in=500,
@@ -97,11 +102,12 @@ DEFAULT_S4_BY_DATASET: dict[str, dict] = {
     ),
 }
 
-# One-factor-at-a-time sensitivity grid.
-# Change/add values here as you like.
+# One-factor-at-a-time sensitivity grid
 PARAM_GRID: dict[str, list] = {
-    "tau": [10.0, 15.0, 20.0, 27.0],
-    "s_in": [0.2, 0.3, 0.5],
+    "beta": [0.1, 0.3, 0.5],
+    "gamma": [0.7, 0.8, 0.9],
+    "s_leaf": [0.5, 0.6, 0.7],
+    "s_in": [0.3, 0.5, 0.6],
     "centers": [3, 5, 7],
     "d_max": [1, 2, 3],
 }
@@ -112,12 +118,50 @@ SAVE_CSV = True
 # =========================================================
 
 
+SUPPORTED_PARAMS = {
+    "alpha",
+    "beta",
+    "gamma",
+    "s_in",
+    "s_out",
+    "s_leaf",
+    "tau",
+    "leaf_deg_max",
+    "centers",
+    "d_max",
+    "C",
+    "max_in",
+    "max_out",
+}
+
+PARAM_COLUMNS = [
+    "alpha",
+    "beta",
+    "gamma",
+    "s_in",
+    "s_out",
+    "s_leaf",
+    "tau",
+    "leaf_deg_max",
+    "centers",
+    "d_max",
+    "C",
+    "max_in",
+    "max_out",
+]
+
+
+def validate_param_grid(param_grid: dict[str, list]) -> None:
+    unknown = [p for p in param_grid if p not in SUPPORTED_PARAMS]
+    if unknown:
+        raise ValueError(f"Unsupported sensitivity parameters: {unknown}")
+
+
 def load_elliptic_labeled_nodes(classes_csv: str) -> set[str]:
     df = pd.read_csv(classes_csv, usecols=["txId", "class"], dtype=str)
     df["txId"] = df["txId"].str.strip()
     df["class"] = df["class"].str.strip()
     return set(df.loc[df["class"].isin(["1", "2"]), "txId"].tolist())
-
 
 
 def load_graph_and_labels(dataset_key: str):
@@ -163,7 +207,6 @@ def load_graph_and_labels(dataset_key: str):
     return G_lcc, illicit, None, dataset_name
 
 
-
 def compute_metrics(H: nx.Graph, illicit: set, labeled: Optional[set] = None) -> dict[str, float]:
     nodes = set(H.nodes())
     V = int(H.number_of_nodes())
@@ -185,14 +228,12 @@ def compute_metrics(H: nx.Graph, illicit: set, labeled: Optional[set] = None) ->
     return out
 
 
-
 def get_param(s4_params: dict, param_name: str):
     if param_name == "tau":
         return s4_params["motif_params"]["star_ratio"]
     if param_name in s4_params.get("motif_params", {}):
         return s4_params["motif_params"][param_name]
     return s4_params[param_name]
-
 
 
 def set_param(s4_params: dict, param_name: str, value) -> None:
@@ -206,6 +247,31 @@ def set_param(s4_params: dict, param_name: str, value) -> None:
         raise ValueError(f"Unsupported parameter: {param_name}")
 
 
+def flatten_s4_params(s4_params: dict) -> dict[str, float]:
+    return {name: get_param(s4_params, name) for name in PARAM_COLUMNS}
+
+
+def build_result_row(
+    *,
+    dataset_name: str,
+    factor: str,
+    value,
+    k: int,
+    radius: int,
+    s4_params: dict,
+    metrics: dict[str, float],
+) -> dict:
+    row = {
+        "dataset": dataset_name,
+        "factor": factor,
+        "value": value,
+        "k": k,
+        "r": radius,
+        **flatten_s4_params(s4_params),
+        **metrics,
+    }
+    return row
+
 
 def run_one_setting(
     G: nx.DiGraph,
@@ -217,12 +283,17 @@ def run_one_setting(
     s4_params: dict,
 ) -> dict[str, float]:
     feed = S4_motif_based_coherent(G, k=k, **s4_params)
-    #H, _ = spnsa(G, feed, radius=radius, verbose=False)
-    H = G.subgraph(feed).copy()
+
+    if EVAL_MODE == "spnsa":
+        H, _ = spnsa(G, feed, radius=radius, verbose=False)
+    elif EVAL_MODE == "induced":
+        H = G.subgraph(feed).copy()
+    else:
+        raise ValueError(f"Unknown EVAL_MODE: {EVAL_MODE}")
+
     result = compute_metrics(H, illicit, labeled=labeled)
     result["feed_size"] = len(feed)
     return result
-
 
 
 def build_sensitivity_tables(
@@ -236,64 +307,76 @@ def build_sensitivity_tables(
     base_s4_params: dict,
     param_grid: dict[str, list],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    validate_param_grid(param_grid)
     rows: list[dict] = []
 
+    baseline_params = copy.deepcopy(base_s4_params)
     baseline_metrics = run_one_setting(
-        G, illicit, labeled, k=k, radius=radius, s4_params=copy.deepcopy(base_s4_params)
+        G, illicit, labeled, k=k, radius=radius, s4_params=baseline_params
     )
-    baseline_row = {
-        "dataset": dataset_name,
-        "factor": "baseline",
-        "value": "default",
-        "k": k,
-        "r": radius,
-        "tau": get_param(base_s4_params, "tau"),
-        "s_in": get_param(base_s4_params, "s_in"),
-        "centers": get_param(base_s4_params, "centers"),
-        "d_max": get_param(base_s4_params, "d_max"),
-        **baseline_metrics,
-    }
-    rows.append(baseline_row)
+    rows.append(
+        build_result_row(
+            dataset_name=dataset_name,
+            factor="baseline",
+            value="default",
+            k=k,
+            radius=radius,
+            s4_params=baseline_params,
+            metrics=baseline_metrics,
+        )
+    )
 
     for factor, values in param_grid.items():
         for value in values:
             s4_params = copy.deepcopy(base_s4_params)
             set_param(s4_params, factor, value)
-
             metrics = run_one_setting(
                 G, illicit, labeled, k=k, radius=radius, s4_params=s4_params
             )
-            row = {
-                "dataset": dataset_name,
-                "factor": factor,
-                "value": value,
-                "k": k,
-                "r": radius,
-                "tau": get_param(s4_params, "tau"),
-                "s_in": get_param(s4_params, "s_in"),
-                "centers": get_param(s4_params, "centers"),
-                "d_max": get_param(s4_params, "d_max"),
-                **metrics,
-            }
-            rows.append(row)
+            rows.append(
+                build_result_row(
+                    dataset_name=dataset_name,
+                    factor=factor,
+                    value=value,
+                    k=k,
+                    radius=radius,
+                    s4_params=s4_params,
+                    metrics=metrics,
+                )
+            )
 
     full_df = pd.DataFrame(rows)
 
+    ordered_cols = [
+        "dataset",
+        "factor",
+        "value",
+        "k",
+        "r",
+        *PARAM_COLUMNS,
+        "feed_size",
+        "|V|",
+        "|E|",
+        "|I|",
+        "IR",
+    ]
+    if "|L(H)|" in full_df.columns:
+        ordered_cols.extend(["|L(H)|", "LIR"])
+    full_df = full_df[[col for col in ordered_cols if col in full_df.columns]]
+
+    baseline_row = full_df.loc[full_df["factor"] == "baseline"].iloc[0]
+    baseline_ir = float(baseline_row["IR"])
+    baseline_lir = float(baseline_row["LIR"]) if "LIR" in full_df.columns else None
+
     summary_rows: list[dict] = []
-    baseline_ir = float(full_df.loc[full_df["factor"] == "baseline", "IR"].iloc[0])
-    baseline_lir = None
-    if "LIR" in full_df.columns:
-        baseline_lir = float(full_df.loc[full_df["factor"] == "baseline", "LIR"].iloc[0])
-
-    for factor in [f for f in full_df["factor"].unique() if f != "baseline"]:
+    for factor in param_grid:
         sub = full_df.loc[full_df["factor"] == factor].copy()
-        best_ir_idx = sub["IR"].idxmax()
-        best_ir_row = sub.loc[best_ir_idx]
 
+        best_ir_row = sub.loc[sub["IR"].idxmax()]
         summary = {
             "dataset": dataset_name,
             "factor": factor,
-            "default_value": full_df.loc[full_df["factor"] == "baseline", factor].iloc[0],
+            "default_value": baseline_row[factor],
             "best_value_by_IR": best_ir_row["value"],
             "best_IR": best_ir_row["IR"],
             "delta_IR_vs_default": best_ir_row["IR"] - baseline_ir,
@@ -303,8 +386,7 @@ def build_sensitivity_tables(
         }
 
         if baseline_lir is not None and "LIR" in sub.columns:
-            best_lir_idx = sub["LIR"].idxmax()
-            best_lir_row = sub.loc[best_lir_idx]
+            best_lir_row = sub.loc[sub["LIR"].idxmax()]
             summary["best_value_by_LIR"] = best_lir_row["value"]
             summary["best_LIR"] = best_lir_row["LIR"]
             summary["delta_LIR_vs_default"] = best_lir_row["LIR"] - baseline_lir
@@ -313,7 +395,6 @@ def build_sensitivity_tables(
 
     summary_df = pd.DataFrame(summary_rows)
     return full_df, summary_df
-
 
 
 def main() -> None:
@@ -338,6 +419,8 @@ def main() -> None:
     print("\n=== S4 sensitivity analysis ===")
     print(f"Dataset: {dataset_name}")
     print(f"(k, r) = ({K}, {RADIUS})")
+    print(f"Evaluation mode: {EVAL_MODE}")
+    print(f"Total runs (including baseline): {len(full_df)}")
     print("\n--- Full results ---")
     print(full_df.to_string(index=False))
     print("\n--- Summary ---")
@@ -345,8 +428,8 @@ def main() -> None:
 
     if SAVE_CSV:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        full_path = OUTPUT_DIR / f"s4_sensitivity_{dataset_key}_k{K}_r{RADIUS}_full.csv"
-        summary_path = OUTPUT_DIR / f"s4_sensitivity_{dataset_key}_k{K}_r{RADIUS}_summary.csv"
+        full_path = OUTPUT_DIR / f"s4_sensitivity_{dataset_key}_k{K}_r{RADIUS}_{EVAL_MODE}_full.csv"
+        summary_path = OUTPUT_DIR / f"s4_sensitivity_{dataset_key}_k{K}_r{RADIUS}_{EVAL_MODE}_summary.csv"
         full_df.to_csv(full_path, index=False)
         summary_df.to_csv(summary_path, index=False)
         print(f"\nSaved:\n- {full_path}\n- {summary_path}")

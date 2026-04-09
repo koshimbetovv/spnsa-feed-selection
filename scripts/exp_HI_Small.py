@@ -10,7 +10,6 @@ import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 
-from src.graph.components import largest_component
 from src.feeds.trivial import S0_oracle_high_illicit, S1_random, S2_largest_degree_difference, S3_mixed_collect_distribute
 from src.feeds.motif import S4_motif_based_coherent
 from src.spnsa import spnsa
@@ -49,11 +48,8 @@ def load_graph_and_illicit():
         raise FileNotFoundError(f"Missing file: {csv_path} (place it under data/ibm-aml/)")
     from src.data.ibm_aml import build_graph_from_transactions, illicit_nodes_from_transactions
     G = build_graph_from_transactions(str(csv_path))
-    G_lcc = largest_component(G, component_type="weak")
     illicit = illicit_nodes_from_transactions(str(csv_path))
-    illicit = set(v for v in illicit if v in G_lcc)
-    return G_lcc, illicit
-
+    return G, illicit
 
 def metrics(H: nx.Graph, illicit: set):
     nodes = set(H.nodes())
@@ -70,12 +66,11 @@ def spnsa_metrics(G: nx.DiGraph, feed, r: int, illicit: set):
 
 
 def main():
-    # G here is the Largest Weakly Connected Component of the original graph
     G, illicit = load_graph_and_illicit()
     nodes = list(G.nodes())
 
     rows = []
-
+    
     # S0
     f0 = S0_oracle_high_illicit(G, illicit, k=k, seed=SEED)
     V, E, I, IR = spnsa_metrics(G, f0, r=r, illicit=illicit)
@@ -105,12 +100,12 @@ def main():
     f3 = S3_mixed_collect_distribute(G, k=k)
     V, E, I, IR = spnsa_metrics(G, f3, r=r, illicit=illicit)
     rows.append(("S3", k, r, V, E, I, IR))
-
+    
     # S4
     f4 = S4_motif_based_coherent(G, k=k, **S4_PARAMS)
     V, E, I, IR = spnsa_metrics(G, f4, r=r, illicit=illicit)
     rows.append(("S4", k, r, V, E, I, IR))
-
+    
     df = pd.DataFrame(rows, columns=["strategy", "k", "r", "|V|", "|E|", "|I|", "IR"])
     print("\n=== Feed strategies (S0–S4):", DATASET_NAME, "===")
     print(df.to_string(index=False))

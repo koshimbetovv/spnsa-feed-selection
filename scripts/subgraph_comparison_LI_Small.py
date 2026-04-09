@@ -32,7 +32,7 @@ S4_PARAMS = dict(
     motif_params=dict(
         alpha=0.2, beta=0.3, gamma=0.8,
         s_in=0.2, s_out=0.4, s_leaf=0.6,
-        star_ratio=27.0, leaf_deg_max=2
+        star_ratio=15.0, leaf_deg_max=2
     ),
     max_in=500,
     max_out=500,

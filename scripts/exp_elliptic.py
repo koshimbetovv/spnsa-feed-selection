@@ -10,7 +10,6 @@ import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 
-from src.graph.components import largest_component
 from src.feeds.trivial import S0_oracle_high_illicit, S1_random, S2_largest_degree_difference, S3_mixed_collect_distribute
 from src.feeds.motif import S4_motif_based_coherent
 from src.spnsa import spnsa
@@ -22,12 +21,12 @@ from src.spnsa import spnsa
 DATASET_NAME = "Elliptic"
 
 # SPNSA parameters
-(k,r) = (500, 1)
+(k,r) = (200, 1)
 
 # S4 parameters (match paper defaults)
 S4_PARAMS = dict(
     C=300_000,
-    centers=7,
+    centers=5,
     d_max=2,
     motif_params=dict(
         alpha=0.2, beta=0.3, gamma=0.8,
